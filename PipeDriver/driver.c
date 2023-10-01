@@ -206,7 +206,7 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
 			pr_alert("Writer sleeping\n");
         	wait_event_interruptible(wait_q, (dataAvailable == false)); 
         	pr_alert("Writer is back!\n");
-        	writersCounter++; 
+        	writersCounter--; 
         break;
 			
         case RD_DATA:
