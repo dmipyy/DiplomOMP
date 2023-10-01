@@ -35,7 +35,7 @@ static struct class *DeviceClass;
 static struct cdev CharDevice;
 static struct IoctlBuffer data;
 
-uint8_t *kernel_buffer;
+//uint8_t *kernel_buffer;
 
 static int __init CharDriverInit(void);
 static void __exit CharDriverExit(void);
@@ -114,6 +114,7 @@ r_class:
 
 static void __exit CharDriverExit(void)
 {
+	kfree(ioBuffer);
     device_destroy(DeviceClass,device);
     class_destroy(DeviceClass);
     cdev_del(&CharDevice);
@@ -132,7 +133,7 @@ static int CharDriverRelease(struct inode *inode , struct file *file)
 {
 	if(driverOpenCounter == 1)
 	{
-		kfree(ioBuffer);
+		//kfree(ioBuffer);
 	}
     pr_alert("Device file closed.....!!!\n");
 	driverOpenCounter--;
@@ -211,17 +212,16 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
 			
         case RD_DATA:
         	readersCounter++;
-        	if (dataAvailable == false)
+        	if (dataAvailable == false || writersCounter > 0)
         	{
         		pr_alert("Reader sleeping\n");
         		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет спать
-        	}else
-        	{
-        		pr_alert("Reader is going to read %d bytes\n", ioBufferLen);
-        		CharDriverRead(filp, (char*)address, (size_t)(ioBufferLen*sizeof(char)),NULL);
-				WRITE_ONCE(dataAvailable,false);	
-				wake_up_interruptible(&wait_q);
-			}
+        		
+        	}
+        	pr_alert("Reader is going to read %d bytes\n", ioBufferLen);
+        	CharDriverRead(filp, (char*)address, (size_t)(ioBufferLen*sizeof(char)),NULL);
+			WRITE_ONCE(dataAvailable,false);	
+			wake_up_interruptible(&wait_q);
 			readersCounter--;
         break;
     }
