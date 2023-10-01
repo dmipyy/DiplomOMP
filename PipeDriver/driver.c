@@ -27,6 +27,8 @@ int ioBufferLen = 0;
 dev_t device = 0; //устройстро символьного драйвера
 
 int driverOpenCounter = 0;
+int readersCounter = 0;
+int writersCounter = 0;
 volatile bool dataAvailable;
 
 static struct class *DeviceClass;
@@ -43,7 +45,7 @@ static ssize_t CharDriverRead(struct file *filp, char *userBuffer, size_t messag
 static ssize_t CharDriverWrite(struct file *filp, const char *userBuffer,size_t maxLength, loff_t *off);
 static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long address);
 
-static DECLARE_WAIT_QUEUE_HEAD(wait_q);	//очередь отправленный "поспать" процессов
+static DECLARE_WAIT_QUEUE_HEAD(wait_q);	//очередь отправленных "поспать" процессов
 
 static struct file_operations fops = 
 {
@@ -66,31 +68,39 @@ static int __init CharDriverInit(void)
 
     pr_alert("Major = %d , Minor = %d..\n",MAJOR(device),MINOR(device));
 
-    //создаем структуру CharDevice
+    //Создаем структуру CharDevice
     cdev_init(&CharDevice,&fops);
 	
-    //добавляем символьное устройство в систему
+    //Добавляем символьное устройство в систему
     if((cdev_add(&CharDevice,device,1)) < 0)
 	{
         pr_alert("Cannot add the device to the system...\n");
         goto r_class;
     }
 	
-    //создаем структуру класса?
+    //Создаем структуру класса
     if((DeviceClass = class_create(THIS_MODULE,"my_class")) == NULL)
 	{
         pr_alert("cannot create struct class...\n");
         goto r_class;
     }
 	
-    //создаем устройство
+    //Создаем устройство
     if((device_create(DeviceClass,NULL,device,NULL,"my_device"))== NULL)
 	{
         pr_alert("cannot create the device..\n");
         goto r_device;
     }
 
+	//Выделяем память под буфер
+    if((ioBuffer = kmalloc(maxMessageLength, GFP_KERNEL)) == 0)
+	{
+        pr_alert("cannot allocate memory in kernel\n");
+        return -1;
+    }
+
 	dataAvailable = false;
+	
     pr_alert("Device driver insert...done properly...\n");
     return 0;
 
@@ -114,12 +124,6 @@ static void __exit CharDriverExit(void)
 static int CharDriverOpen(struct inode *inode, struct file *file)
 {
 	driverOpenCounter++;
-	//kernel_buffer
-    if((ioBuffer = kmalloc(maxMessageLength, GFP_KERNEL)) == 0)
-	{
-        pr_alert("cannot allocate memory in kernel\n");
-        return -1;
-    }
     pr_alert("Device file opened...!!!!\n");
     return 0;
 }
@@ -195,17 +199,30 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
     switch(cmd)
 	{
     	case WR_DATA:
+    		writersCounter++;
         	ioBufferLen = CharDriverWrite(filp, (char*)address, sizeof(data), NULL); 
 			WRITE_ONCE(dataAvailable,true);	
 			wake_up_interruptible(&wait_q);
-        	wait_event_interruptible(wait_q, (dataAvailable == false));  
+			pr_alert("Writer sleeping\n");
+        	wait_event_interruptible(wait_q, (dataAvailable == false)); 
+        	pr_alert("Writer is back!\n");
+        	writersCounter++; 
         break;
 			
         case RD_DATA:
-			wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, пока количество доступных байтов равно 0
-        	CharDriverRead(filp, (char*)address, (size_t)(ioBufferLen*sizeof(char)),NULL);
-			WRITE_ONCE(dataAvailable,false);	
-			wake_up_interruptible(&wait_q);
+        	readersCounter++;
+        	if (dataAvailable == false)
+        	{
+        		pr_alert("Reader sleeping\n");
+        		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет спать
+        	}else
+        	{
+        		pr_alert("Reader is going to read %d bytes\n", ioBufferLen);
+        		CharDriverRead(filp, (char*)address, (size_t)(ioBufferLen*sizeof(char)),NULL);
+				WRITE_ONCE(dataAvailable,false);	
+				wake_up_interruptible(&wait_q);
+			}
+			readersCounter--;
         break;
     }
     return 0;
