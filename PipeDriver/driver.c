@@ -215,8 +215,7 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
         	if (dataAvailable == false || writersCounter > 0)
         	{
         		pr_alert("Reader sleeping\n");
-        		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет спать
-        		
+        		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет читать		
         	}
         	pr_alert("Reader is going to read %d bytes\n", ioBufferLen);
         	CharDriverRead(filp, (char*)address, (size_t)(ioBufferLen*sizeof(char)),NULL);
