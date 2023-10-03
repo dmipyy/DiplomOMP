@@ -1,5 +1,15 @@
 #include "libsClient.h"
 
+
+#define maxMessageLength 1024
+#define WR_DATA _IOW('a','a',char*)
+#define RD_DATA _IOR('a','b',char*)
+
+struct IoctlBuffer //структура данных для функции ioctl
+{
+	char message[maxMessageLength];
+};
+
 int main()
 {
 	int fd[2]; //файловый дискриптор

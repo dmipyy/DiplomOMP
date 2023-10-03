@@ -1,52 +1,4 @@
 #include "libsDriver.h"
-#include "circBuff.h"
-#include "libsCircBuff.h"
-
-#define maxMessageLength 8
-#define WR_DATA _IOW('a','a',char*)
-#define RD_DATA _IOR('a','b',char*)
-
-struct IoctlBuffer //структура данных для функции ioctl
-{
-	char message[maxMessageLength];
-};
-
-char *ioBuffer = NULL;
-int ioBufferLen = 0;
-dev_t device = 0; //устройстро символьного драйвера
-
-int driverOpenCounter = 0;
-int readersCounter = 0;
-int writersCounter = 0;
-volatile bool dataAvailable;
-
-CircBuff_t cb;
-
-static struct class *DeviceClass;
-static struct cdev CharDevice;
-static struct IoctlBuffer data;
-
-//uint8_t *kernel_buffer;
-
-static int __init CharDriverInit(void);
-static void __exit CharDriverExit(void);
-static int CharDriverOpen(struct inode *inode, struct file *file);
-static int CharDriverRelease(struct inode *inode , struct file *file);
-static ssize_t CharDriverRead(struct file *filp, char *userBuffer, size_t messageLength, loff_t *off);
-static ssize_t CharDriverWrite(struct file *filp, const char *userBuffer,size_t maxLength, loff_t *off);
-static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long address);
-
-static DECLARE_WAIT_QUEUE_HEAD(wait_q);	//очередь отправленных "поспать" процессов
-
-static struct file_operations fops = 
-{
-    .owner = THIS_MODULE,
-    .read = CharDriverRead,
-    .write = CharDriverWrite,
-    .open = CharDriverOpen,
-    .unlocked_ioctl = CharDriverIoctl,
-    .release = CharDriverRelease,
-};
 
 static int __init CharDriverInit(void)
 {
@@ -82,24 +34,29 @@ static int __init CharDriverInit(void)
         pr_alert("cannot create the device..\n");
         goto r_device;
     }
+	
 	/*
 	//Выделяем память под буфер
-    if((ioBuffer = kmalloc(maxMessageLength, GFP_KERNEL)) == 0)
+    if((circBuffer->buf = kmalloc(circBufferLen, GFP_KERNEL)) == 0)
 	{
         pr_alert("cannot allocate memory in kernel\n");
+		kfree(circBuffer);
         return -1;
-    }
-	*/
+    }*/
 	
-	//Выделяем память под буфер
-	if((ioBuffer = kmalloc(maxMessageLength, GFP_KERNEL)) == 0)
+	circBuffer->buf = kmalloc(circBufferLen, GFP_KERNEL);
+	if (circBuffer->buf == 0)
 	{
-        pr_alert("cannot allocate memory in kernel\n");
-        return -1;
-    }
+		//ret = -ENOMEM;
+		pr_alert("driver | Error allocationg mem for circle buffer\n");
+		kfree(circBuffer);
+		return -1;
+	}
+	
+	circBuffer->head = 0;
+	circBuffer->tail = 0;
 	dataAvailable = false;
 	
-	CircBuffInit(ioBuffer, maxMessageLength, sizeof(char), &cb);
     pr_alert("Device driver insert...done properly...\n");
     return 0;
 
@@ -113,8 +70,9 @@ r_class:
 
 static void __exit CharDriverExit(void)
 {
-	kfree(ioBuffer);
-    device_destroy(DeviceClass,device);
+	kfree(circBuffer->buf);
+	kfree(circBuffer);
+    device_destroy(DeviceClass, device);
     class_destroy(DeviceClass);
     cdev_del(&CharDevice);
     unregister_chrdev_region(device,1);
@@ -124,62 +82,149 @@ static void __exit CharDriverExit(void)
 static int CharDriverOpen(struct inode *inode, struct file *file)
 {
 	driverOpenCounter++;
+	try_module_get(THIS_MODULE);
     pr_alert("Device file opened...!!!!\n");
     return 0;
 }
 
 static int CharDriverRelease(struct inode *inode , struct file *file)
 {
-    pr_alert("Device file closed.....!!!\n");
 	driverOpenCounter--;
+	pr_alert("Device file closed.....!!!\n");
     return 0;
 }
 
 static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t messageLength, loff_t *off)
 {
+	int head, tail, byteCounter, outCounter,
+	remainder, seqLength, newTail, newEnd;
+	
+	head = READ_ONCE(circBuffer->head);
+	tail = READ_ONCE(circBuffer->tail);
+	byteCounter = CIRC_CNT(head, tail, circBufferLen);
+	pr_alert("driver | Read | Head: %d, Tail: %d, Bytes: %d\n", head, tail, byteCounter);
+	
+	if (byteCounter >= messageLength)
+	{
+		outCounter = messageLength;
+	}
+	else if (byteCounter > 0)
+	{
+		outCounter = byteCounter;
+		//WRITE_ONCE(dataAvailable, false);
+	}
+	else
+	{
+		//WRITE_ONCE(dataAvailable, false);
+		return 0;
+	}
+	
+	newEnd = CIRC_CNT_TO_END(head, tail, circBufferLen) + 1;
+	remainder = outCounter % newEnd;
+	seqLength = outCounter - remainder;
+	newTail = (tail + outCounter) & (circBufferLen - 1);
+	pr_alert("driver | Read | End: %d, Rem: %d, Seq: %d, Out: %d, Tail: %d\n", newEnd, remainder, seqLength, outCounter, newTail);
+	
+	outCounter = outCounter - copy_to_user(userBuffer, circBuffer->buf + tail, remainder); //сколько байтов на самом деле записали
+	outCounter = outCounter - copy_to_user(userBuffer + remainder, circBuffer->buf, seqLength);
+	newTail = (tail + outCounter) & (circBufferLen - 1);
+	WRITE_ONCE(circBuffer->tail, newTail);
+	
+	return outCounter;
+	
+	/*
 	//сделать проверку на количество открытий
     pr_alert("Reading to %c\n", &userBuffer);
     //char localBuffer[1024] = {"Hello World"};
-	
-	char tempBuf[messageLength];
-	CircBuffDataWatch((char*)tempBuf, messageLength, cb);
-	
-    pr_alert("Sending message: %s\n", tempBuf);
-    int lostBytes = copy_to_user(userBuffer, tempBuf, messageLength);
+    pr_alert("Sending message: %s\n", ioBuffer);
+    int lostBytes = copy_to_user(userBuffer, ioBuffer, messageLength);
     pr_alert("Lost bytes %d\n",lostBytes);
 
     return messageLength;
+	*/
 }
 
 static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,size_t maxLength, loff_t *off)
 {
-    int realMessageLength = 0;
+	int head, tail, space, newHead;
+	int realMessageLength = 0;
 	
-    pr_alert("Writing");
     copy_from_user(&(data.message), userBuffer, maxLength);
-    pr_alert("AFTER COPY FROM USER");
-	
 	//считаем настоящую длину сообщения
     char *ptr;
     ptr = data.message;
-	pr_alert("CONTINUED WRITING");
     for(int i = 0; i <= maxLength ; ++i)
 	{
 		realMessageLength++;
         ++ptr;
         if(*ptr == '\0') break;	
     }
-    ptr = data.message;		
 	
-    CircBuffDataPut(ptr, realMessageLength, cb);
+	head = READ_ONCE(circBuffer->head);
+	tail = READ_ONCE(circBuffer->tail);
+	space = CIRC_SPACE(head, READ_ONCE(circBuffer->tail), circBufferLen);
+	pr_alert("driver | Write | Writing. Head: %d, Tail: %d, Space: %d, Bytes: %lu\n", head, tail, space, realMessageLength);
 	
-    char tempBuf[realMessageLength];
-	CircBuffDataWatch((char*)tempBuf, realMessageLength, cb); 
+	if (space >= realMessageLength)
+	{
+		int remainder = realMessageLength % (CIRC_SPACE_TO_END(head, tail, circBufferLen) + 1);
+		int seqLength = realMessageLength - remainder;
+		newHead = (head + realMessageLength) & (circBufferLen - 1);
+		pr_alert("drivier : Write : Rem %d, Seq %d, New Head: %d\n", remainder, seqLength, newHead);
+		
+		copy_from_user(circBuffer->buf + head, userBuffer, remainder);
+		copy_from_user(circBuffer->buf, userBuffer + remainder, seqLength);
+		WRITE_ONCE(circBuffer->head, newHead);
+		//WRITE_ONCE(dataAvailable,true);
+		
+		//wake_up_interruptible(&wait_q);
+	}
+	else
+	{
+		int remainder, seqLength;
+		head = 0;
+		tail = 0;
+		
+		WRITE_ONCE(circBuffer->tail, tail);
+		WRITE_ONCE(circBuffer->head, head);
+		
+		remainder = realMessageLength % (CIRC_SPACE_TO_END(head, tail, circBufferLen) + 1);
+		seqLength = realMessageLength - remainder;
+		newHead = (head + realMessageLength) & (circBufferLen - 1);
+		printk("driver | Flush | Rem: %d, Seq: %d, New Head: %d\n", remainder, seqLength, newHead);
+		
+		copy_from_user(circBuffer->buf + head, userBuffer, remainder);
+		copy_from_user(circBuffer->buf, userBuffer + remainder, seqLength);
+		WRITE_ONCE(circBuffer->head, newHead);
+		//WRITE_ONCE(dataAvailable,true);
+		
+	}
 	
-    pr_alert("Message: %s\n", tempBuf);
+	return realMessageLength;
+		
+		
+    /*		
+    if((ioBuffer = krealloc(ioBuffer, (realMessageLength + 1)*sizeof(char), GFP_KERNEL))== 0)
+	{
+     	pr_alert("cannot allocate memory in kernel\n");
+        return -1;
+    }
+        	
+    ptr = data.message;
+  
+    for(int i = 0; i < realMessageLength; ++i)
+    {
+    	ioBuffer[i] = *ptr;
+    	++ptr;
+    }
+    ioBuffer[realMessageLength] = '\0';
+    
+	
+    pr_alert("Message: %s\n", ioBuffer);
     pr_alert("Message length = %d",realMessageLength);
     
     return realMessageLength + 1;
+	*/
 }
 
 static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long address)

@@ -1,21 +1,22 @@
-#include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/module.h>
-#include <linux/kdev_t.h>
-#include <linux/fs.h>
+#include <linux/init.h>
 #include <linux/cdev.h>
-#include <linux/device.h>
+#include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
-#include <linux/ioctl.h>
-#include <linux/interrupt.h>
 #include <linux/semaphore.h>
-#include <linux/string.h>
+#include <linux/circ_buf.h>
+#include <linux/delay.h>
+#include <linux/device.h>
+#include <linux/types.h>
+#include <linux/interrupt.h>
+#include <linux/kernel.h>
 #include <linux/fcntl.h>
 
 #define maxMessageLength 1024
 #define WR_DATA _IOW('a','a',char*)
 #define RD_DATA _IOR('a','b',char*)
+#define circBufferLen 16
 
 struct IoctlBuffer //структура данных для функции ioctl
 {
@@ -35,6 +36,7 @@ static struct class *DeviceClass;
 static struct cdev CharDevice;
 static struct IoctlBuffer data;
 
+struct circ_buf *circBuffer;
 //uint8_t *kernel_buffer;
 
 static int __init CharDriverInit(void);
@@ -56,3 +58,6 @@ static struct file_operations fops =
     .unlocked_ioctl = CharDriverIoctl,
     .release = CharDriverRelease,
 };
+
+
+
