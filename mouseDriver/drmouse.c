@@ -31,8 +31,7 @@ int index;
 volatile bool dataAvailable;
 
 static irqreturn_t mouseInterrupt(int irq, void *devId) {
-	//ktime_t ktime_get(void);
-	unsigned int randomNumber;
+
 
 	bootTime = ktime_get_boottime();
 	bitValue = (bootTime >> bitBasic) &1;
