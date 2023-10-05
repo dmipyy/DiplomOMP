@@ -8,10 +8,13 @@
 #include <linux/time.h>
 #include <linux/interrupt.h>
 #include <linux/timekeeping.h>
+#include <linux/math.h>
 
 
 #define DEVICE_NAME "random_mouse"
 #define CLASS_NAME "random"
+#define randomBits 40
+#define bitBasic 1
 
 static dev_t dev;
 static struct cdev CharDevice;
@@ -19,23 +22,53 @@ static struct class *DeviceClass;
 static struct device *DevFile;
 
 static int irqNum;
+static DECLARE_WAIT_QUEUE_HEAD(wait_q);	//очередь отправленных "поспать" процессов
+long randomValue;
+bool binaryArray[randomBits];
+long bootTime;
+long bitValue;
+int index;
+volatile bool dataAvailable;
 
 static irqreturn_t mouseInterrupt(int irq, void *devId) {
 	//ktime_t ktime_get(void);
 	unsigned int randomNumber;
-	//struct timespec currentTime = current_kernel_time();
-	//unsigned int timeValue = currentTime.tv_sec;
-	
-	get_random_bytes(&randomNumber, sizeof(randomNumber));
-	//randomNumber ^= timeValue;
-	unsigned int timeValue = ktime_get_boottime_seconds();
-	randomNumber ^= timeValue;
-	pr_alert("Random number generated: %u, Time: %u \n", randomNumber, timeValue);
+
+	bootTime = ktime_get_boottime();
+	bitValue = (bootTime >> bitBasic) &1;
+	if (index < randomBits){
+		binaryArray[index] = bitValue;
+		//randomValue += binaryArray[index] * (1<<(randomBits - index - 1));
+		randomValue = index;
+		++index;
+	} else if (index == randomBits){
+		WRITE_ONCE(dataAvailable, true);
+		wake_up_interruptible(&wait_q);
+	}
+
+	pr_alert("Bite from time: %u, Time: %u , RandomValue: %u \n", bitValue, bootTime, randomValue);
 	
 	return IRQ_HANDLED;
 }
 
 static ssize_t driverRead(struct file *filp, char __user *userBuffer, size_t len, loff_t *off) {
+	if (dataAvailable == false){
+		pr_alert("Reader sleeping\n");
+        wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет читать
+	}
+	
+	pr_alert("Reader is back!\n");
+	randomValue = 0;
+	
+	for (int i = 0; i < randomBits; i++){
+		//randomValue += binaryArray[i] * (1<<(randomBits - i - 1));
+		binaryArray[i];
+		sprintf("NICE %d", i);
+	}
+	//sprintf ("Our random value: %i\n", binaryArray);
+
+	WRITE_ONCE(dataAvailable, false);
+	index = 0;
 	
     return len;
 	
@@ -100,6 +133,10 @@ static int __init driverInit(void) {
         unregister_chrdev_region(dev, 1);
         return -1;
     }
+    
+    //инициализация переменных
+    index = 0;
+    dataAvailable = false;
     
     pr_alert("Random mouse driver registered\n");
     return 0;
