@@ -30,12 +30,14 @@ static ssize_t driverRead(struct file *filp, char __user *userBuffer, size_t len
 	
 	randomValue = 0;
 	randomValue = tempValue;
-	/*for (int i = 0; i < randomBits; i++){
-		randomValue = randomValue + (binaryArray[i] * (1<<(randomBits - i - 1)));
-		pr_alert("temp random value: %llu", randomValue);
-	}*/
-	pr_alert("OUR RANDOM VALUE: %llu", randomValue);
-	//sprintf ("Our random value: %i\n", binaryArray);
+	char strRandomValue[randomBits];
+	
+	//pr_alert("OUR RANDOM VALUE: %llu", randomValue);
+	sprintf (strRandomValue, "Our random value: %llu\n", randomValue);
+	
+	if (copy_to_user(userBuffer, strRandomValue, strlen(strRandomValue))) {
+        return -EFAULT;
+    }
 
 	WRITE_ONCE(dataAvailable, false);
 	WRITE_ONCE(index, 0);
