@@ -10,7 +10,7 @@
 #include <linux/timekeeping.h>
 #include <linux/math.h>
 
-#define DEVICE_NAME "random_mouse"
+#define DEVICE_NAME "randomMouse"
 #define CLASS_NAME "random"
 #define randomBits 40
 #define bitBasic 1
