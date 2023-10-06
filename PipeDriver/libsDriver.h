@@ -17,6 +17,14 @@
 #define WR_DATA _IOW('a','a',char*)
 #define RD_DATA _IOR('a','b',char*)
 
+#define bufferSize 10 // размер буфера
+char buffer[bufferSize]; // выделение памяти под буфер
+char *bufferStart; // указатель на начало буфера
+char *bufferEnd; // указатель на конец буфера
+char *currentPosition; // указатель на текущую позицию в буфере
+
+int countSleep = 0;
+
 struct IoctlBuffer //структура данных для функции ioctl
 {
 	char message[maxMessageLength];
@@ -29,6 +37,7 @@ dev_t device = 0; //устройстро символьного драйвера
 int driverOpenCounter = 0;
 int readersCounter = 0;
 int writersCounter = 0;
+int realMessageLength = 0;
 volatile bool dataAvailable;
 
 static struct class *DeviceClass;
