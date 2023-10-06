@@ -1,12 +1,46 @@
-#include "randomMouse.h"
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/fs.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/uaccess.h>
+#include <linux/random.h>
+#include <linux/time.h>
+#include <linux/interrupt.h>
+#include <linux/timekeeping.h>
+#include <linux/math.h>
+
+
+#define DEVICE_NAME "random_mouse"
+#define CLASS_NAME "random"
+#define randomBits 40
+#define bitBasic 1
+
+static dev_t dev;
+static struct cdev CharDevice;
+static struct class *DeviceClass;
+static struct device *DevFile;
+
+static int irqNum;
+static DECLARE_WAIT_QUEUE_HEAD(wait_q);	//очередь отправленных "поспать" процессов
+unsigned long long randomValue;
+bool binaryArray[randomBits];
+unsigned long long bootTime;
+unsigned long long bitValue;
+unsigned long long tempValue;
+int index;
+volatile bool dataAvailable;
 
 static irqreturn_t mouseInterrupt(int irq, void *devId) {
 
 
 	bootTime = ktime_get_boottime();
-	bitValue = (bootTime) &1;
+	bitValue = (bootTime >> bitBasic) &1;
 	if (index < randomBits){
 		tempValue = tempValue | (bitValue << index);
+		//binaryArray[index] = bitValue;
+		//randomValue += binaryArray[index] * (1<<(randomBits - index - 1));
+		//randomValue = index;
 		++index;
 	} else if (index == randomBits){
 		WRITE_ONCE(dataAvailable, true);
@@ -27,7 +61,12 @@ static ssize_t driverRead(struct file *filp, char __user *userBuffer, size_t len
 	
 	randomValue = 0;
 	randomValue = tempValue;
+	/*for (int i = 0; i < randomBits; i++){
+		randomValue = randomValue + (binaryArray[i] * (1<<(randomBits - i - 1)));
+		pr_alert("temp random value: %llu", randomValue);
+	}*/
 	pr_alert("OUR RANDOM VALUE: %llu", randomValue);
+	//sprintf ("Our random value: %i\n", binaryArray);
 
 	WRITE_ONCE(dataAvailable, false);
 	WRITE_ONCE(index, 0);
