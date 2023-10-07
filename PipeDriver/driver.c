@@ -77,10 +77,6 @@ static int CharDriverOpen(struct inode *inode, struct file *file)
 
 static int CharDriverRelease(struct inode *inode , struct file *file)
 {
-	if(driverOpenCounter == 1)
-	{
-		//kfree(ioBuffer);
-	}
     pr_alert("Device file closed.....!!!\n");
 	driverOpenCounter--;
     return 0;
@@ -88,9 +84,18 @@ static int CharDriverRelease(struct inode *inode , struct file *file)
 
 static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t messageLength, loff_t *off)
 {
-	char tempBuffer[bufferSize];
+	int tempBufferLenght = 0;
+	if (!lastLap)
+	{
+		tempBufferLenght = bufferSize;
+	}
+	else
+	{
+		tempBufferLenght = remainder;
+	}
+	char tempBuffer[tempBufferLenght];
 	currentPosition = bufferStart;
-	for(int i = 0; i < bufferSize ; ++i)
+	for(int i = 0; i < tempBufferLenght ; ++i)
 	{
 		tempBuffer[i] = *currentPosition;
 		currentPosition++;
@@ -99,7 +104,7 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
     pr_alert("Reading to %c\n", &userBuffer);
     //char localBuffer[1024] = {"Hello World"};
     pr_alert("Sending message: %s\n", tempBuffer);
-    int lostBytes = copy_to_user(userBuffer, tempBuffer, bufferSize);
+    int lostBytes = copy_to_user(userBuffer, tempBuffer, tempBufferLenght);
     pr_alert("Lost bytes %d\n",lostBytes);
 
     return messageLength;
@@ -181,16 +186,22 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
 			
         case RD_DATA:
         	//readersCounter++;
+			lastLap = false;
         	if (dataAvailable == false)
         	{
         		pr_alert("Reader sleeping\n");
         		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет читать		
         	}
 			int i = 0;
-			if(realMessageLength % bufferSize) i = realMessageLength / bufferSize + 1;
+			if(realMessageLength % bufferSize)
+			{
+				i = (realMessageLength / bufferSize) + 1;
+				remainder = realMessageLength % bufferSize;
+			}
 			else i = realMessageLength / bufferSize;
 			while(i > 0)
 			{
+				if (i == 1) lastLap = true;
 				pr_alert("Reader is going to read %d bytes\n", bufferSize);
 				CharDriverRead(filp, (char*)address, (size_t)(bufferSize*sizeof(char)),NULL);
 				WRITE_ONCE(dataAvailable,false);	

@@ -23,8 +23,8 @@ char *bufferStart; // указатель на начало буфера
 char *bufferEnd; // указатель на конец буфера
 char *currentPosition; // указатель на текущую позицию в буфере
 
-int countSleep = 0;
-
+int remainder = 0;
+bool lastLap;
 struct IoctlBuffer //структура данных для функции ioctl
 {
 	char message[maxMessageLength];
