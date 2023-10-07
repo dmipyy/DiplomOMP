@@ -36,11 +36,13 @@ static int __init CharDriverInit(void)
     }
 
 	//Выделяем память под буфер
-    if((ioBuffer = kmalloc(maxMessageLength, GFP_KERNEL)) == 0)
+    if((buffer = kmalloc(bufferSize, GFP_KERNEL)) == 0)
 	{
         pr_alert("cannot allocate memory in kernel\n");
         return -1;
     }
+
+	
 	bufferStart = buffer; // указатель на начало буфера
 	bufferEnd = buffer + bufferSize - 1; // указатель на конец буфера
 	currentPosition = bufferStart; // указатель на текущую позицию в буфере
@@ -60,7 +62,7 @@ r_class:
 
 static void __exit CharDriverExit(void)
 {
-	kfree(ioBuffer);
+	kfree(buffer);
     device_destroy(DeviceClass,device);
     class_destroy(DeviceClass);
     cdev_del(&CharDevice);
@@ -84,18 +86,18 @@ static int CharDriverRelease(struct inode *inode , struct file *file)
 
 static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t messageLength, loff_t *off)
 {
-	int tempBufferLenght = 0;
+	int tempBufferLength = 0;
 	if (!lastLap)
 	{
-		tempBufferLenght = bufferSize;
+		tempBufferLength = bufferSize;
 	}
 	else
 	{
-		tempBufferLenght = remainder;
+		tempBufferLength = remainder;
 	}
-	char tempBuffer[tempBufferLenght];
+	char tempBuffer[tempBufferLength];
 	currentPosition = bufferStart;
-	for(int i = 0; i < tempBufferLenght ; ++i)
+	for(int i = 0; i < tempBufferLength ; ++i)
 	{
 		tempBuffer[i] = *currentPosition;
 		currentPosition++;
@@ -103,8 +105,8 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
 	currentPosition = bufferStart;
     pr_alert("Reading to %c\n", &userBuffer);
     //char localBuffer[1024] = {"Hello World"};
-    pr_alert("Sending message: %s\n", tempBuffer);
-    int lostBytes = copy_to_user(userBuffer, tempBuffer, tempBufferLenght);
+    pr_alert("Sending message: %s , with sizeof: %i, with variable %i\n", tempBuffer,sizeof(tempBuffer),tempBufferLength);
+    int lostBytes = copy_to_user(userBuffer, tempBuffer, sizeof(tempBuffer));
     pr_alert("Lost bytes %d\n",lostBytes);
 
     return messageLength;
@@ -114,14 +116,14 @@ static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,
 {
     pr_alert("Writing");
     copy_from_user(&(data.message), userBuffer, maxLength);
-    pr_alert("AFTER COPY FROM USER");
+   
 	
     int realWriteMessageLength = 0;
 	
 	//считаем настоящую длину сообщения
     char *ptr;
     ptr = data.message;
-	pr_alert("CONTINUED WRITING");
+	
     for(int i = 0; i <= maxLength ; ++i)
 	{
 		realWriteMessageLength++;
@@ -193,21 +195,28 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
         		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет читать		
         	}
 			int i = 0;
+			int bufferLen = bufferSize;
 			if(realMessageLength % bufferSize)
 			{
 				i = (realMessageLength / bufferSize) + 1;
 				remainder = realMessageLength % bufferSize;
+				
 			}
 			else i = realMessageLength / bufferSize;
+			pr_alert("Number of LAPS: %d\n", i);
+			
 			while(i > 0)
 			{
-				if (i == 1) lastLap = true;
+				if (i == 1){
+					lastLap = true;
+					bufferLen = remainder;
+				}
 				pr_alert("Reader is going to read %d bytes\n", bufferSize);
 				CharDriverRead(filp, (char*)address, (size_t)(bufferSize*sizeof(char)),NULL);
 				WRITE_ONCE(dataAvailable,false);	
 				wake_up_interruptible(&wait_q);
 				if (i > 1) wait_event_interruptible(wait_q, (dataAvailable == true));
-				address += bufferSize;
+				address += bufferLen;
 				i--;
 			}
         	

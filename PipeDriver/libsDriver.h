@@ -18,7 +18,8 @@
 #define RD_DATA _IOR('a','b',char*)
 
 #define bufferSize 10 // размер буфера
-char buffer[bufferSize]; // выделение памяти под буфер
+//const int bufferSize = 8;
+char *buffer; // выделение памяти под буфер
 char *bufferStart; // указатель на начало буфера
 char *bufferEnd; // указатель на конец буфера
 char *currentPosition; // указатель на текущую позицию в буфере
