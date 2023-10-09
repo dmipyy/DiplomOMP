@@ -1,5 +1,4 @@
 #include "libsDriver.h"
-#include <linux/string.h>
 
 static int __init CharDriverInit(void)
 {
@@ -48,9 +47,6 @@ static int __init CharDriverInit(void)
         pr_alert("cannot allocate memory in kernel\n");
         return -1;
     }
-    
-    
-
 	
 	bufferStart = buffer; // указатель на начало буфера
 	bufferEnd = buffer + bufferSize - 1; // указатель на конец буфера
@@ -81,7 +77,6 @@ static void __exit CharDriverExit(void)
 
 static int CharDriverOpen(struct inode *inode, struct file *file)
 {
-	driverOpenCounter++;
     pr_alert("Device file opened...!!!!\n");
     return 0;
 }
@@ -89,7 +84,6 @@ static int CharDriverOpen(struct inode *inode, struct file *file)
 static int CharDriverRelease(struct inode *inode , struct file *file)
 {
     pr_alert("Device file closed.....!!!\n");
-	driverOpenCounter--;
     return 0;
 }
 
@@ -105,9 +99,7 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
 	else
 	{
 		tempBufferLength = remainder;
-	}
-	//char tempBuffer[tempBufferLength];
-	
+	}	
 	
 	currentPosition = bufferStart;
 	for(int i = 0; i < tempBufferLength ; ++i)
@@ -117,7 +109,6 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
 	}
 	currentPosition = bufferStart;
     pr_alert("Reading to %c\n", &userBuffer);
-    //char localBuffer[1024] = {"Hello World"};
     pr_alert("Sending message: %s , with sizeof: %i, with variable %i\n", tempBuffer,sizeof(tempBuffer),tempBufferLength);
     int lostBytes = copy_to_user(userBuffer, tempBuffer, tempBufferLength);
     pr_alert("Lost bytes %d\n",lostBytes);
@@ -129,28 +120,20 @@ static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,
 {
     pr_alert("Writing");
     copy_from_user(&(data.message), userBuffer, maxLength);
-   
 	
     int realWriteMessageLength = 0;
 	
 	//считаем настоящую длину сообщения
     char *ptr;
     ptr = data.message;
-	
     for(int i = 0; i <= maxLength ; ++i)
 	{
 		realWriteMessageLength++;
         ++ptr;
         if(*ptr == '\0') break;	
     }
-	realMessageLength = realWriteMessageLength;
-    /*		
-    if((ioBuffer = krealloc(ioBuffer, (realWriteMessageLength + 1)*sizeof(char), GFP_KERNEL))== 0)
-	{
-     	pr_alert("cannot allocate memory in kernel\n");
-        return -1;
-    }
-    */   	
+    
+	realMessageLength = realWriteMessageLength; 	
     ptr = data.message;
     for(int i = 0; i < realWriteMessageLength; ++i)
     {
@@ -162,14 +145,12 @@ static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,
 			pr_alert("Writer sleeping\n");
         	wait_event_interruptible(wait_q, (dataAvailable == false));
 			pr_alert("Writer is back!\n");
-			pr_alert("AAAAAA %d\n", i + 1);
 			*currentPosition = *ptr;
 			currentPosition++;
     		ptr++;
 		}
 		else 
 		{
-		pr_alert("%d\n", i + 1);
 		*currentPosition = *ptr;
 		currentPosition++;
     	ptr++;
@@ -178,7 +159,6 @@ static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,
     WRITE_ONCE(dataAvailable,true);	
 	wake_up_interruptible(&wait_q);
 	
-    //pr_alert("Message: %s\n", ioBuffer);
     pr_alert("Message length = %d",realWriteMessageLength);
     
     return realWriteMessageLength;
@@ -191,16 +171,11 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
     switch(cmd)
 	{
     	case WR_DATA:
-    		//writersCounter++;
         	realMessageLength = CharDriverWrite(filp, (char*)address, sizeof(data), NULL); 
-			//WRITE_ONCE(dataAvailable,true);	
-			//wake_up_interruptible(&wait_q);
-        	
-        	//writersCounter--; 
+			
         break;
 			
         case RD_DATA:
-        	//readersCounter++;
 			lastLap = false;
         	if (dataAvailable == false)
         	{
@@ -213,14 +188,14 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
 			{
 				i = (realMessageLength / bufferSize) + 1;
 				remainder = realMessageLength % bufferSize;
-				
 			}
 			else i = realMessageLength / bufferSize;
-			pr_alert("Number of LAPS: %d\n", i);
 			
+			pr_alert("Number of LAPS: %d\n", i);
 			while(i > 0)
 			{
-				if (i == 1){
+				if (i == 1)
+				{
 					lastLap = true;
 					bufferLen = remainder;
 				}
@@ -228,12 +203,14 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
 				CharDriverRead(filp, (char*)address, (size_t)(bufferLen*sizeof(char)),NULL);
 				WRITE_ONCE(dataAvailable,false);	
 				wake_up_interruptible(&wait_q);
-				if (i > 1) wait_event_interruptible(wait_q, (dataAvailable == true));
+				if (i > 1)
+				{
+					wait_event_interruptible(wait_q, (dataAvailable == true));
+				}
 				address += bufferLen;
 				i--;
 			}
         	
-			//readersCounter--;
         break;
     }
     return 0;
