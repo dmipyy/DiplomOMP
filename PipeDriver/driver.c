@@ -1,4 +1,5 @@
 #include "libsDriver.h"
+#include <linux/string.h>
 
 static int __init CharDriverInit(void)
 {
@@ -36,11 +37,19 @@ static int __init CharDriverInit(void)
     }
 
 	//Выделяем память под буфер
-    if((buffer = kmalloc(bufferSize, GFP_KERNEL)) == 0)
+	if((buffer = kmalloc(bufferSize, GFP_KERNEL)) == 0)
 	{
         pr_alert("cannot allocate memory in kernel\n");
         return -1;
     }
+	
+    if((tempBuffer = kmalloc(bufferSize, GFP_KERNEL)) == 0)
+	{
+        pr_alert("cannot allocate memory in kernel\n");
+        return -1;
+    }
+    
+    
 
 	
 	bufferStart = buffer; // указатель на начало буфера
@@ -86,6 +95,8 @@ static int CharDriverRelease(struct inode *inode , struct file *file)
 
 static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t messageLength, loff_t *off)
 {
+	memset(tempBuffer, 0, sizeof(tempBuffer));
+
 	int tempBufferLength = 0;
 	if (!lastLap)
 	{
@@ -95,7 +106,9 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
 	{
 		tempBufferLength = remainder;
 	}
-	char tempBuffer[tempBufferLength];
+	//char tempBuffer[tempBufferLength];
+	
+	
 	currentPosition = bufferStart;
 	for(int i = 0; i < tempBufferLength ; ++i)
 	{
@@ -106,7 +119,7 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
     pr_alert("Reading to %c\n", &userBuffer);
     //char localBuffer[1024] = {"Hello World"};
     pr_alert("Sending message: %s , with sizeof: %i, with variable %i\n", tempBuffer,sizeof(tempBuffer),tempBufferLength);
-    int lostBytes = copy_to_user(userBuffer, tempBuffer, sizeof(tempBuffer));
+    int lostBytes = copy_to_user(userBuffer, tempBuffer, tempBufferLength);
     pr_alert("Lost bytes %d\n",lostBytes);
 
     return messageLength;
@@ -168,7 +181,7 @@ static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,
     //pr_alert("Message: %s\n", ioBuffer);
     pr_alert("Message length = %d",realWriteMessageLength);
     
-    return realWriteMessageLength ;
+    return realWriteMessageLength;
 }
 
 static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long address)
@@ -212,7 +225,7 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
 					bufferLen = remainder;
 				}
 				pr_alert("Reader is going to read %d bytes\n", bufferSize);
-				CharDriverRead(filp, (char*)address, (size_t)(bufferSize*sizeof(char)),NULL);
+				CharDriverRead(filp, (char*)address, (size_t)(bufferLen*sizeof(char)),NULL);
 				WRITE_ONCE(dataAvailable,false);	
 				wake_up_interruptible(&wait_q);
 				if (i > 1) wait_event_interruptible(wait_q, (dataAvailable == true));

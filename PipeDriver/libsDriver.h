@@ -23,6 +23,7 @@ char *buffer; // выделение памяти под буфер
 char *bufferStart; // указатель на начало буфера
 char *bufferEnd; // указатель на конец буфера
 char *currentPosition; // указатель на текущую позицию в буфере
+char *tempBuffer;
 
 int remainder = 0;
 bool lastLap;
