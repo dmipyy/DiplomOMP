@@ -43,8 +43,9 @@ void MainWindow::executeApp(QString executePath,QString applicationName)
     //    qWarning() << message.errorMessage();
    //}
 
+
     // Получаем соединение с сеансовой шиной D-Bus
-     QDBusConnection connection = QDBusConnection::systemBus();
+     QDBusConnection connection = QDBusConnection::sessionBus();
      if (!connection.isConnected()) {
          qWarning() << "Failed to connect to the D-Bus session bus.";
      }
@@ -54,12 +55,12 @@ void MainWindow::executeApp(QString executePath,QString applicationName)
 
     QString applicationInterface = "org.freedesktop.DBus";
 
-     // Создаем интерфейс для запуска приложения
-     //QDBusInterface interface("org.freedesktop.DBus",
-      //                        "/org/freedesktop/DBus",
-      //                        "org.freedesktop.DBus",
-     //                         connection, this
-     //                         );
+     //Создаем интерфейс для запуска приложения
+     QDBusInterface interface("org.freedesktop.DBus",
+                             "/org/freedesktop/DBus",
+                             "org.freedesktop.DBus",
+                             connection, this
+                              );
      // Запускаем приложение
 
      QString serviceArgs = "-config=config.ini";
@@ -74,17 +75,17 @@ void MainWindow::executeApp(QString executePath,QString applicationName)
      //          << QString::number(startType) << QString::number(sessionID)
      //          << desktopName << QString::number(error);
 
-     QDBusMessage message = QDBusMessage::createMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "StartServiceByName");
+     //QDBusMessage message = QDBusMessage::createMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "StartServiceByName");
+     //QDBusMessage message = QDBusMessage::createMethodCall("org.freedesktop.DBus",
+     //                                                      "/org/freedesktop/DBus", "org.freedesktop.DBus",
+     //                                                      "StartServiceByName");
 
-     arguments << applicationName << serviceArgs;
-     message << arguments;
+     //arguments << applicationName << serviceArgs;
+     arguments << "org.mozilla.firefox" << 0;
+     uint arg = 0;
+     //message << "org.freedesktop.DBus" << arg;
      qDebug() << "1" ;
-     //process.start("StartServiceByName", arguments);
      qDebug() << "2" ;
-     //if(process.waitForFinished(-1)){
-     //    qDebug() << "3" ;
-     //}
-
      int exitCode = 0;
      exitCode = process.exitCode();
      qDebug() << exitCode;
@@ -93,26 +94,23 @@ void MainWindow::executeApp(QString executePath,QString applicationName)
 
     //QDBusMessage message = QDBusMessage::createMethodCall("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "StartServiceByName");
 
-
-    //    message.setArguments(arguments);
-
         // Отправляем сообщение и ждем ответа
-    QDBusMessage reply = connection.call(message);
-    if (reply.type() == QDBusMessage::ReplyMessage) {
-            qDebug() << "Метод успешно вызван";
-        } else {
-            qDebug() << "Ошибка при вызове метода:" << reply.errorName() << reply.errorMessage();
-        }
-    //QDBusMessage message = interface.call("StartServiceByName", applicationName,serviceArgs);
-    //qDebug() << "5" ;
-    //if (message.type() == QDBusMessage::ErrorMessage) {
-    //    qWarning() << message.errorMessage();
-    //}
+    //QDBusMessage reply = connection.call(message);
+    //if (reply.type() == QDBusMessage::ReplyMessage) {
+    //        qDebug() << "Метод успешно вызван";
+    //    } else {
+    //        qDebug() << "Ошибка при вызове метода:" << reply.errorName() << reply.errorMessage();
+    //    }
+    QDBusMessage message = interface.call("StartServiceByName", "org.mozilla.firefox.ZGVmYXVsdA__", arg);
+    qDebug() << "5" ;
+    if (message.type() == QDBusMessage::ErrorMessage) {
+        qWarning() << message.errorMessage();
+    }
 }
 
 void MainWindow::start(QString fileType) {
     QMap<QString, QString> fileApplications = {
-            {"txt", "notepadqq"},
+            {"txt", "firefox"},
             {"jpg", "mspaint.exe"},
             {"png", "mspaint.exe"},
             {"gif", "mspaint.exe"},
