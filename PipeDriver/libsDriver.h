@@ -12,30 +12,37 @@
 #include <linux/semaphore.h>
 #include <linux/string.h>
 #include <linux/fcntl.h>
+#include <linux/string.h>
 
 #define maxMessageLength 1024
 #define WR_DATA _IOW('a','a',char*)
 #define RD_DATA _IOR('a','b',char*)
+
+#define bufferSize 10 // размер буфера
+//const int bufferSize = 8;
+char *buffer; // выделение памяти под буфер
+char *bufferStart; // указатель на начало буфера
+char *bufferEnd; // указатель на конец буфера
+char *currentPosition; // указатель на текущую позицию в буфере
+char *tempBuffer;
+
+int remainder = 0;
+bool lastLap;
 
 struct IoctlBuffer //структура данных для функции ioctl
 {
 	char message[maxMessageLength];
 };
 
-char *ioBuffer = NULL;
 int ioBufferLen = 0;
 dev_t device = 0; //устройстро символьного драйвера
 
-int driverOpenCounter = 0;
-int readersCounter = 0;
-int writersCounter = 0;
+int realMessageLength = 0;
 volatile bool dataAvailable;
 
 static struct class *DeviceClass;
 static struct cdev CharDevice;
 static struct IoctlBuffer data;
-
-//uint8_t *kernel_buffer;
 
 static int __init CharDriverInit(void);
 static void __exit CharDriverExit(void);

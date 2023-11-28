@@ -1,13 +1,3 @@
-*.out
-*.ko
-*.o
-*.mod
-*.order
-*.symvers
-*.mod.c
-*.cmd
-
-*build-TYPIFIER-Desktop-Debug/
 # This file is used to ignore files which are generated
 # ----------------------------------------------------------------------------
 

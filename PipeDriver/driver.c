@@ -36,12 +36,22 @@ static int __init CharDriverInit(void)
     }
 
 	//Выделяем память под буфер
-    if((ioBuffer = kmalloc(maxMessageLength, GFP_KERNEL)) == 0)
+	if((buffer = kmalloc(bufferSize, GFP_KERNEL)) == 0)
 	{
         pr_alert("cannot allocate memory in kernel\n");
         return -1;
     }
-
+	
+    if((tempBuffer = kmalloc(bufferSize, GFP_KERNEL)) == 0)
+	{
+        pr_alert("cannot allocate memory in kernel\n");
+        return -1;
+    }
+	
+	bufferStart = buffer; // указатель на начало буфера
+	bufferEnd = buffer + bufferSize - 1; // указатель на конец буфера
+	currentPosition = bufferStart; // указатель на текущую позицию в буфере
+	
 	dataAvailable = false;
 	
     pr_alert("Device driver insert...done properly...\n");
@@ -57,7 +67,7 @@ r_class:
 
 static void __exit CharDriverExit(void)
 {
-	kfree(ioBuffer);
+	kfree(buffer);
     device_destroy(DeviceClass,device);
     class_destroy(DeviceClass);
     cdev_del(&CharDevice);
@@ -67,29 +77,40 @@ static void __exit CharDriverExit(void)
 
 static int CharDriverOpen(struct inode *inode, struct file *file)
 {
-	driverOpenCounter++;
     pr_alert("Device file opened...!!!!\n");
     return 0;
 }
 
 static int CharDriverRelease(struct inode *inode , struct file *file)
 {
-	if(driverOpenCounter == 1)
-	{
-		//kfree(ioBuffer);
-	}
     pr_alert("Device file closed.....!!!\n");
-	driverOpenCounter--;
     return 0;
 }
 
 static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t messageLength, loff_t *off)
 {
-	//сделать проверку на количество открытий
+	memset(tempBuffer, 0, sizeof(tempBuffer));
+
+	int tempBufferLength = 0;
+	if (!lastLap)
+	{
+		tempBufferLength = bufferSize;
+	}
+	else
+	{
+		tempBufferLength = remainder;
+	}	
+	
+	currentPosition = bufferStart;
+	for(int i = 0; i < tempBufferLength ; ++i)
+	{
+		tempBuffer[i] = *currentPosition;
+		currentPosition++;
+	}
+	currentPosition = bufferStart;
     pr_alert("Reading to %c\n", &userBuffer);
-    //char localBuffer[1024] = {"Hello World"};
-    pr_alert("Sending message: %s\n", ioBuffer);
-    int lostBytes = copy_to_user(userBuffer, ioBuffer, messageLength);
+    pr_alert("Sending message: %s , with sizeof: %i, with variable %i\n", tempBuffer,sizeof(tempBuffer),tempBufferLength);
+    int lostBytes = copy_to_user(userBuffer, tempBuffer, tempBufferLength);
     pr_alert("Lost bytes %d\n",lostBytes);
 
     return messageLength;
@@ -97,43 +118,50 @@ static ssize_t CharDriverRead(struct file *filp, char __user *userBuffer, size_t
 
 static ssize_t CharDriverWrite(struct file *filp, const char __user *userBuffer,size_t maxLength, loff_t *off)
 {
-    int realMessageLength = 0;
-	
     pr_alert("Writing");
     copy_from_user(&(data.message), userBuffer, maxLength);
-    pr_alert("AFTER COPY FROM USER");
+	
+    int realWriteMessageLength = 0;
 	
 	//считаем настоящую длину сообщения
     char *ptr;
     ptr = data.message;
-	pr_alert("CONTINUED WRITING");
     for(int i = 0; i <= maxLength ; ++i)
 	{
-		realMessageLength++;
+		realWriteMessageLength++;
         ++ptr;
         if(*ptr == '\0') break;	
     }
-    		
-    if((ioBuffer = krealloc(ioBuffer, (realMessageLength + 1)*sizeof(char), GFP_KERNEL))== 0)
-	{
-     	pr_alert("cannot allocate memory in kernel\n");
-        return -1;
-    }
-        	
+    
+	realMessageLength = realWriteMessageLength; 	
     ptr = data.message;
-  
-    for(int i = 0; i < realMessageLength; ++i)
+    for(int i = 0; i < realWriteMessageLength; ++i)
     {
-    	ioBuffer[i] = *ptr;
-    	++ptr;
+		if (currentPosition > bufferEnd)
+		{
+			currentPosition = bufferStart;
+			WRITE_ONCE(dataAvailable,true);	
+			wake_up_interruptible(&wait_q);
+			pr_alert("Writer sleeping\n");
+        	wait_event_interruptible(wait_q, (dataAvailable == false));
+			pr_alert("Writer is back!\n");
+			*currentPosition = *ptr;
+			currentPosition++;
+    		ptr++;
+		}
+		else 
+		{
+		*currentPosition = *ptr;
+		currentPosition++;
+    	ptr++;
+		}
     }
-    ioBuffer[realMessageLength] = '\0';
-    
+    WRITE_ONCE(dataAvailable,true);	
+	wake_up_interruptible(&wait_q);
 	
-    pr_alert("Message: %s\n", ioBuffer);
-    pr_alert("Message length = %d",realMessageLength);
+    pr_alert("Message length = %d",realWriteMessageLength);
     
-    return realMessageLength + 1;
+    return realWriteMessageLength;
 }
 
 static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long address)
@@ -143,28 +171,46 @@ static long CharDriverIoctl(struct file *filp, unsigned int cmd, unsigned long a
     switch(cmd)
 	{
     	case WR_DATA:
-    		writersCounter++;
-        	ioBufferLen = CharDriverWrite(filp, (char*)address, sizeof(data), NULL); 
-			WRITE_ONCE(dataAvailable,true);	
-			wake_up_interruptible(&wait_q);
-			pr_alert("Writer sleeping\n");
-        	wait_event_interruptible(wait_q, (dataAvailable == false)); 
-        	pr_alert("Writer is back!\n");
-        	writersCounter--; 
+        	realMessageLength = CharDriverWrite(filp, (char*)address, sizeof(data), NULL); 
+			
         break;
 			
         case RD_DATA:
-        	readersCounter++;
-        	if (dataAvailable == false || writersCounter > 0)
+			lastLap = false;
+        	if (dataAvailable == false)
         	{
         		pr_alert("Reader sleeping\n");
         		wait_event_interruptible(wait_q, (dataAvailable == true));	//ждём, когда можно будет читать		
         	}
-        	pr_alert("Reader is going to read %d bytes\n", ioBufferLen);
-        	CharDriverRead(filp, (char*)address, (size_t)(ioBufferLen*sizeof(char)),NULL);
-			WRITE_ONCE(dataAvailable,false);	
-			wake_up_interruptible(&wait_q);
-			readersCounter--;
+			int i = 0;
+			int bufferLen = bufferSize;
+			if(realMessageLength % bufferSize)
+			{
+				i = (realMessageLength / bufferSize) + 1;
+				remainder = realMessageLength % bufferSize;
+			}
+			else i = realMessageLength / bufferSize;
+			
+			pr_alert("Number of LAPS: %d\n", i);
+			while(i > 0)
+			{
+				if (i == 1)
+				{
+					lastLap = true;
+					bufferLen = remainder;
+				}
+				pr_alert("Reader is going to read %d bytes\n", bufferSize);
+				CharDriverRead(filp, (char*)address, (size_t)(bufferLen*sizeof(char)),NULL);
+				WRITE_ONCE(dataAvailable,false);	
+				wake_up_interruptible(&wait_q);
+				if (i > 1)
+				{
+					wait_event_interruptible(wait_q, (dataAvailable == true));
+				}
+				address += bufferLen;
+				i--;
+			}
+        	
         break;
     }
     return 0;
