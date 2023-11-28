@@ -14,17 +14,16 @@ DBusService::DBusService(int value){
 
 void DBusService::registerApplication(const QString& appName, const QStringList& capabilities, const QString& command)
 {
-    QDBusConnection connection = QDBusConnection::sessionBus();
 
-    if(!connection.registerService("my.App.Service"))
-    {
-        qDebug() << "error: " << connection.lastError().message();
-        exit(-1);
-    }
+    // Путь к браузеру Firefox
+    QString browserPath = "notepad-plus-plus";
 
-    DBusService object(60);
+    // Аргументы для запуска в режиме приватного окна
+    QStringList browserArgs = {"/home/artem/Documents/Programming/Astra/hello_world.c"};
 
-    connection.registerObject("NULL", &object,QDBusConnection::ExportAllSlots);
+    // Запуск браузера Firefox
+    QProcess::startDetached(browserPath, browserArgs);
+
 }
 
 QStringList DBusService::getApplicationsByCapability(const QString& capability)
@@ -34,5 +33,9 @@ QStringList DBusService::getApplicationsByCapability(const QString& capability)
 
 void DBusService::launchApplication(const QString& appName, const QString& filePath)
 {
-    // Реализация метода запуска приложения
+    // Аргументы для запуска приложения (путь до файла)
+    QStringList appArgs = {filePath};
+    // Запуск приложения
+    QProcess::startDetached(appName, appArgs);
+
 }
