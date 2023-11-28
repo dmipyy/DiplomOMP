@@ -19,12 +19,12 @@ int main(int argc, char *argv[])
     DBusService object(60);
 
     connection.registerObject("/test/objects", &object,QDBusConnection::ExportAllSlots);
+    //QString appName = "evince";
+    //QString appName = "eog";
+    QString appName = "totem";
+    // Аргументы
+    QString filePath = "/home/artem/Downloads/eminem-nate-dogg-till-i-collapse_(muztub.com).mp3";
 
-    DBusService dbusService(123);
-    QString appName = "MyApp";
-    QStringList capabilities = {"capability1", "capability2"};
-    QString command = "/path/to/myapp";
-
-    dbusService.registerApplication(appName, capabilities, command); // Вызов метода регистрации приложения
+    object.launchApplication(appName, filePath);
     return app.exec();
 }

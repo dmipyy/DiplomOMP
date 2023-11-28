@@ -3,6 +3,7 @@
 
 #endif // DBUS_SERVICE_H
 #include <QObject>
+#include <QProcess>
 
 class DBusService : public QObject
 {
