@@ -5,14 +5,34 @@
 #include <QObject>
 #include <QProcess>
 
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDebug>
+
+#include <QCoreApplication>
+
+#include <QDBusInterface>
+#include <QDBusReply>
+
+
+
 class DBusService : public QObject
 {
     Q_OBJECT
 
-public: DBusService(int value);
+public: DBusService();
+    QMap<QString, QString> get()
+    {
+        return fileApplications;
+    }
+
+private:
+    QMap<QString, QString> fileApplications;
 
 public slots:
-    void registerApplication(const QString& appName, const QStringList& capabilities, const QString& command);
-    QStringList getApplicationsByCapability(const QString& capability);
-    void launchApplication(const QString& appName, const QString& filePath);
+    void launchApplication(const QString& filePath);
+
 };
+
+QString getAppName(const QString& filePath);
+void sendMessageToDBus(const QString& filePath);

@@ -16,15 +16,14 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    DBusService object(60);
+    DBusService object;
 
-    connection.registerObject("/test/objects", &object,QDBusConnection::ExportAllSlots);
-    //QString appName = "evince";
-    //QString appName = "eog";
-    QString appName = "totem";
+    connection.registerObject("/interfaces", &object,QDBusConnection::ExportAllSlots);
+
     // Аргументы
-    QString filePath = "/home/artem/Downloads/eminem-nate-dogg-till-i-collapse_(muztub.com).mp3";
+    QString filePath = "/home/dmippy/Downloads/abc.txt";
+    //QString appName = getAppName(filePath);
+    sendMessageToDBus(filePath);
 
-    object.launchApplication(appName, filePath);
     return app.exec();
 }
