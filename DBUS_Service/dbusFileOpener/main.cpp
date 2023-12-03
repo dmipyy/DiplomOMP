@@ -20,7 +20,6 @@ int main(int argc, char *argv[])
 
     connection.registerObject("/interfaces", &object,QDBusConnection::ExportAllSlots);
 
-
     // Аргументы
     QString filePath = "/home/artem/Downloads/abc.txt";
     //QString appName = getAppName(filePath);
