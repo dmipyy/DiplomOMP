@@ -16,11 +16,12 @@ public:
     MainWindow(QWidget *parent = nullptr);
 
 private slots:
-    void readFilePath();
-
+    void on_readButton_clicked();
+    void on_launchButton_clicked();
 private:
-    QLineEdit *filePathEdit;
     QPushButton *readButton;
+    QPushButton *launchButton;
+    QString filePath;
 };
 
 #endif // MAINWINDOW_H

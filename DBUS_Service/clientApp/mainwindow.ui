@@ -15,14 +15,29 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QLineEdit" name="filePathEdit"/>
-   </item>
-   <item>
-    <widget class="QPushButton" name="readButton">
+    <widget class="QLabel" name="textLabel">
      <property name="text">
-      <string>Read File Path</string>
+      <string>TextLabel</string>
      </property>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QPushButton" name="readButton">
+       <property name="text">
+        <string>Open file</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="launchButton">
+       <property name="text">
+        <string>Launch applications</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

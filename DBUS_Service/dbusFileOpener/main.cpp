@@ -21,9 +21,9 @@ int main(int argc, char *argv[])
     connection.registerObject("/interfaces", &object,QDBusConnection::ExportAllSlots);
 
     // Аргументы
-    QString filePath = "/home/artem/Downloads/abc.txt";
+    //QString filePath = "/home/dmippy/Downloads/cpp.png";
     //QString appName = getAppName(filePath);
-    sendMessageToDBus(filePath);
+    //sendMessageToDBus(filePath);
 
     return app.exec();
 }

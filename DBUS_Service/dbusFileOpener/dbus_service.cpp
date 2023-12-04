@@ -2,19 +2,7 @@
 
 DBusService::DBusService()
 {
-    fileApplications =
-    {
-        {"txt", "gedit"},
-        {"c", "gedit"},
-        {"jpg", "eog"},
-        {"png", "eog"},
-        {"gif", "eog"},
-        {"mp3", "totem"},
-        {"wav", "totem"},
-        {"mp4", "vlc.exe"},
-        {"avi", "vlc.exe"},
-        {"mov", "quicktime.exe"}
-    };
+
 }
 
 QString getAppName(const QString& filePath)
@@ -38,7 +26,7 @@ QString getAppName(const QString& filePath)
     QString application;
     // Проверяем, есть ли такой тип файла в словаре
     DBusService temp;
-    QMap<QString, QString> fileApplications = temp.get();
+    QMap<QString, QString> fileApplications = temp.getMap();
     if (fileApplications.count(fileExtension) > 0)
     {
         application = fileApplications[fileExtension];
@@ -54,11 +42,35 @@ QString getAppName(const QString& filePath)
 
 void DBusService::launchApplication(const QString& filePath)
 {
+    if(filePath == "/home/dmippy/Documents/abc.txt")
+    {
+        regApplication(filePath);
+    }
+    else
+    {
+        QString appName = getAppName(filePath);
+        // Аргументы для запуска приложения (путь до файла)
+        QStringList appArgs = {filePath};
+        // Запуск приложения
+        QProcess::startDetached(appName, appArgs);
+    }
+}
+
+void DBusService::regApplication(const QString& filePath)
+{
+    DBusService temp;
+    QMap<QString, QString> fileApplications;
+
     QString appName = getAppName(filePath);
-    // Аргументы для запуска приложения (путь до файла)
-    QStringList appArgs = {filePath};
-    // Запуск приложения
-    QProcess::startDetached(appName, appArgs);
+    QFile file(filePath);
+    QString key, elem;
+    while(!file.atEnd())
+    {
+        key = file.readLine();
+        elem = file.readLine();
+        temp.setMap(key, elem);
+    }
+    abc();
 
 }
 
@@ -82,7 +94,15 @@ void sendMessageToDBus(const QString& filePath)
 
 }
 
-
+void abc()
+{
+    DBusService a;
+    QMap<QString, QString> fileApplications = a.getMap();
+    for (auto i = fileApplications.begin(); i != fileApplications.end(); ++i)
+    {
+        qDebug() << "Key: " << i.key() << ", Value: " << i.value();
+    }
+}
 
 
 
