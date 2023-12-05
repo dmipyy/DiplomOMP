@@ -17,5 +17,6 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 HEADERS += \
+    FileAppHolder.h \
     application.h \
     dbus_service.h

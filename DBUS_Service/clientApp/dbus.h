@@ -12,7 +12,5 @@
 
 #include <dbusFileOpenerAPI.h>
 
-void sendMessageToDBus(const QString& filePath);
-
-
+void sendMessageToDBus(const QString& filePath, const QString& choosedMethod);
 #endif // DBUS_H

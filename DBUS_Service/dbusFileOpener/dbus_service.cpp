@@ -1,107 +1,89 @@
+#include "FileAppHolder.h"
 #include "dbus_service.h"
+#include <algorithm>
 
 DBusService::DBusService()
 {
 
 }
 
-QString getAppName(const QString& filePath)
+FileAppHolder::FileAppHolder()
+{
+
+}
+
+void DBusService::switchMethod(const QString& filePath, const QString& choosedMethod)
+{
+    static FileAppHolder fileAppHolder;
+    if(choosedMethod == "open") launchApplication(filePath, fileAppHolder);
+    else if(choosedMethod == "reg") regApplication(filePath, fileAppHolder);
+    else qDebug() << "Ошибка, ничего не передалось!";
+}
+
+QString getAppName(const QString& filePath, FileAppHolder& fileAppHolder)
 {
     QString fileExtension;
-    for(int i = filePath.length() - 1; i >= 0; i--)
-    {
+    for(int i = filePath.length() - 1; i >= 0; --i) {
         if(filePath[i] == '.')
-        {
-
             break;
-        }
-        fileExtension +=  filePath[i];
+
+        fileExtension +=  filePath[i]; //QString stream почитать
     }
-    QString reversedStr;
-    for (int i = fileExtension.length() - 1; i >= 0; i--) {
-        reversedStr += fileExtension[i];
-    }
-    fileExtension = reversedStr;
+    std::reverse(fileExtension.begin(),fileExtension.end());
 
     QString application;
     // Проверяем, есть ли такой тип файла в словаре
-    DBusService temp;
-    QMap<QString, QString> fileApplications = temp.getMap();
-    if (fileApplications.count(fileExtension) > 0)
-    {
-        application = fileApplications[fileExtension];
+    if (fileAppHolder.getFileApp().count(fileExtension) > 0) {
+        application = fileAppHolder.getFileApp()[fileExtension];
         qDebug() << "Открываем файл с помощью приложения: " << application << '\n';
     }
     else
-    {
         qDebug() << "Неизвестный тип файла" << '\n';
-    }
 
     return application;
 }
 
-void DBusService::launchApplication(const QString& filePath)
+void DBusService::launchApplication(const QString& filePath, FileAppHolder& fileAppHolder)
 {
-    if(filePath == "/home/dmippy/Documents/abc.txt")
-    {
-        regApplication(filePath);
-    }
-    else
-    {
-        QString appName = getAppName(filePath);
-        // Аргументы для запуска приложения (путь до файла)
-        QStringList appArgs = {filePath};
-        // Запуск приложения
-        QProcess::startDetached(appName, appArgs);
-    }
+    QString extension = getAppName(filePath, fileAppHolder);
+    // Аргументы для запуска приложения (путь до файла)
+    QStringList appArgs {filePath};
+    // Запуск приложения
+    QProcess::startDetached(extension, appArgs);
+
 }
 
-void DBusService::regApplication(const QString& filePath)
+void DBusService::regApplication(const QString& filePath, FileAppHolder& fileAppHolder)
 {
-    DBusService temp;
-    QMap<QString, QString> fileApplications;
-
-    QString appName = getAppName(filePath);
+    //QString appName {getAppName(filePath, fileAppHolder)};
     QFile file(filePath);
+    if(!file.exists()) {
+        qDebug() << "Файл не существует, читать нечего!" << '\n';
+        return;
+    }
+    if(!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "Файл не открылся" << '\n';
+        return;
+    }
+
     QString key, elem;
-    while(!file.atEnd())
-    {
+    while(!file.atEnd()) {
         key = file.readLine();
+        key.chop(1);
         elem = file.readLine();
-        temp.setMap(key, elem);
+        elem.chop(1);
+        fileAppHolder.addElemToFileApp(key, elem);
+        //qDebug() << "addElem";
     }
-    abc();
-
+    //printMap(fileAppHolder);
+    qDebug() << "Расширения и приложения зарегистрированы!" << '\n';
 }
 
-void sendMessageToDBus(const QString& filePath)
+void printMap(FileAppHolder& fileAppHolder)
 {
-    QDBusConnection bus = QDBusConnection::sessionBus();
-    QDBusMessage message = QDBusMessage::createMethodCall(
-        "org.example.Service", // Имя целевого объекта
-        "/interfaces", // Путь к объекту
-        "local.dbusFileOpener.DBusService", // Интерфейс
-        "launchApplication" // Метод
-    );
-    message << filePath;
-
-    QDBusMessage reply = bus.call(message);
-    if (reply.type() == QDBusMessage::ReplyMessage) {
-        qDebug() << "Сообщение успешно отправлено";
-    } else {
-        qDebug() << "Ошибка при отправке сообщения:" << reply.errorName() << reply.errorMessage();
-    }
-
-}
-
-void abc()
-{
-    DBusService a;
-    QMap<QString, QString> fileApplications = a.getMap();
+    const QMap<QString, QString>& fileApplications {fileAppHolder.getFileApp()};
     for (auto i = fileApplications.begin(); i != fileApplications.end(); ++i)
-    {
         qDebug() << "Key: " << i.key() << ", Value: " << i.value();
-    }
 }
 
 

@@ -18,10 +18,10 @@ public:
 private slots:
     void on_readButton_clicked();
     void on_launchButton_clicked();
+    //void on_regFileButton_clicked();
 private:
     QPushButton *readButton;
     QPushButton *launchButton;
-    QString filePath;
 };
 
 #endif // MAINWINDOW_H
